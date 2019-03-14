@@ -12,7 +12,7 @@ import scipy.signal
 import os
 import time
 import inspect
-from utils.general import get_logger, Progbar, export_plot, mask_state
+from utils.general import get_logger, Progbar, export_plot, mask_obs, get_obs_dims
 from utils.wrappers import PreproWrapper, MaxAndSkipEnv
 from utils.preprocess import greyscale
 from config import get_config
@@ -127,6 +127,8 @@ class PG(object):
     # store hyperparameters
     self.config = config
     self.use_mask = use_mask
+    if use_mask:
+      print('Using mask...')
     self.logger = logger
     if logger is None:
       self.logger = get_logger(config.log_path)
@@ -134,7 +136,7 @@ class PG(object):
 
     # discrete vs continuous action space
     self.discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    self.observation_dim = self.env.observation_space.shape[0]
+    self.observation_dim = get_obs_dims(self.config.env_name, self.use_mask)
     self.action_dim = self.env.action_space.n if self.discrete else self.env.action_space.shape[0]
     self.lr = self.config.learning_rate
 
@@ -459,16 +461,15 @@ class PG(object):
 
     while (num_episodes or t < self.config.batch_size):
       state = env.reset()
-      state = mask_state(self.config.env_name, state)
+      if self.use_mask:
+        state = mask_obs(self.config.env_name, state)
       states, actions, rewards, memories, percolates = [], [], [], [], []
       episode_reward = 0
 
-      step = 0
-      done = False
-      while not done:
+      for step in range(self.config.max_ep_len):
         states.append(state)
 
-        # for milestone: randomly get batch_size sets of samples
+        # for milestone: randomly get memory_len sets of samples
         if self.replay_buffer.can_sample(self.memory_len):
           memory = []
           for i in range(1):
@@ -495,7 +496,8 @@ class PG(object):
         })
         action = action[0]
         next_state, reward, done, info = env.step(action)
-        next_state = mask_state(self.config.env_name, next_state)
+        if self.use_mask:
+          next_state = mask_obs(self.config.env_name, next_state)
 
         # for milestone
         idx = self.replay_buffer.store_frame(state)

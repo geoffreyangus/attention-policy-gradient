@@ -7,12 +7,23 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
+CHEETAH_DIMS = 17
+CHEETAH_DIMS_MASKED = 8
 
-def mask_state(env_name, state):
+def get_obs_dims(env_name, use_mask):
     if env_name == 'HalfCheetah-v1':
-        return state[:8]
+        if use_mask:
+            return CHEETAH_DIMS_MASKED
+        else:
+            return CHEETAH_DIMS
     else:
-        raise NotImplementedError
+        raise ValueError
+
+def mask_obs(env_name, obs):
+    if env_name == 'HalfCheetah-v1':
+        return obs[:8]
+    else:
+        raise ValueError
 
 
 def export_plot(ys, ylabel, title, filename):
