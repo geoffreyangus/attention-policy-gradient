@@ -8,6 +8,13 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 
+def mask_state(env_name, state):
+    if env_name == 'HalfCheetah-v1':
+        return state[:8]
+    else:
+        raise NotImplementedError
+
+
 def export_plot(ys, ylabel, title, filename):
     """
     Export a plot in filename
@@ -41,7 +48,7 @@ def get_logger(filename):
 
 class Progbar(object):
     """Progbar class copied from keras (https://github.com/fchollet/keras/)
-    
+
     Displays a progress bar.
     Small edit : added strict arg to update
     # Arguments

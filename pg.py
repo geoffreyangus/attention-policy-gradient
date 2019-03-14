@@ -12,7 +12,7 @@ import scipy.signal
 import os
 import time
 import inspect
-from utils.general import get_logger, Progbar, export_plot
+from utils.general import get_logger, Progbar, export_plot, mask_state
 from utils.wrappers import PreproWrapper, MaxAndSkipEnv
 from utils.preprocess import greyscale
 from config import get_config
@@ -23,6 +23,8 @@ parser.add_argument('--env_name', required=True, type=str,
                     choices=['cartpole', 'pendulum', 'cheetah', 'pong'])
 parser.add_argument('--baseline', dest='use_baseline', action='store_true')
 parser.add_argument('--no-baseline', dest='use_baseline', action='store_false')
+parser.add_argument('--mask', dest='use_mask', action='store_true')
+parser.add_argument('--no-mask', dest='use_mask', action='store_false')
 parser.set_defaults(use_baseline=True)
 
 def build_attention_layer(
@@ -103,13 +105,14 @@ class PG(object):
   """
   Abstract Class for implementing a Policy Gradient Based Algorithm
   """
-  def __init__(self, env, config, logger=None):
+  def __init__(self, env, config, use_mask, logger=None):
     """
     Initialize Policy Gradient Class
 
     Args:
             env: an OpenAI Gym environment
             config: class with hyperparameters
+            use_mask: train time, omit velocity features in state
             logger: logger instance from the logging module
 
     You do not need to implement anything in this function. However,
@@ -123,6 +126,7 @@ class PG(object):
 
     # store hyperparameters
     self.config = config
+    self.use_mask = use_mask
     self.logger = logger
     if logger is None:
       self.logger = get_logger(config.log_path)
@@ -455,10 +459,13 @@ class PG(object):
 
     while (num_episodes or t < self.config.batch_size):
       state = env.reset()
+      state = mask_state(self.config.env_name, state)
       states, actions, rewards, memories, percolates = [], [], [], [], []
       episode_reward = 0
 
-      for step in range(self.config.max_ep_len):
+      step = 0
+      done = False
+      while not done:
         states.append(state)
 
         # for milestone: randomly get batch_size sets of samples
@@ -488,6 +495,7 @@ class PG(object):
         })
         action = action[0]
         next_state, reward, done, info = env.step(action)
+        next_state = mask_state(self.config.env_name, next_state)
 
         # for milestone
         idx = self.replay_buffer.store_frame(state)
@@ -638,7 +646,6 @@ class PG(object):
     scores_eval = [] # list of scores computed at iteration time
 
     for t in range(self.config.num_batches):
-
       # collect a minibatch of samples
       paths, total_rewards = self.sample_path(self.env)
 
@@ -688,7 +695,8 @@ class PG(object):
     Not used right now, all evaluation statistics are computed during training
     episodes.
     """
-    if env==None: env = self.env
+    if env == None:
+      env = self.env
     paths, rewards = self.sample_path(env, num_episodes)
     avg_reward = np.mean(rewards)
     sigma_reward = np.sqrt(np.var(rewards) / len(rewards))
@@ -724,9 +732,7 @@ if __name__ == '__main__':
     config = get_config(args.env_name, args.use_baseline)
     env = gym.make(config.env_name)
     if args.env_name == 'pong':
-      env = MaxAndSkipEnv(env, skip=config.skip_frame)
-      env = PreproWrapper(env, prepro=greyscale, shape=(80, 80, 1),
-                          overwrite_render=config.overwrite_render)
+      raise NotImplementedError
     # train model
-    model = PG(env, config)
+    model = PG(env, config, args.use_mask)
     model.run()
