@@ -68,7 +68,7 @@ class ReplayBuffer(object):
         next_obs_batch = np.concatenate([self._encode_observation(idx + 1)[None] for idx in idxes], 0)
         done_mask      = np.array([1.0 if self.done[idx] else 0.0 for idx in idxes], dtype=np.float32)
 
-        return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask
+        return act_batch, obs_batch, rew_batch, # next_obs_batch, done_mask
 
     def sample_stack(self, num_memories):
         """Sample `num_memories` different transitions, concatenated.
@@ -87,7 +87,6 @@ class ReplayBuffer(object):
             s, a, r, s' features all stacked.
         """
         batch_tuple = self.sample(num_memories)
-
         batch = []
         for el in batch_tuple:
             batch.append(el.reshape(num_memories, -1).astype(np.float32))
@@ -128,7 +127,7 @@ class ReplayBuffer(object):
             Array of shape (batch_size,) and dtype np.float32
         """
         assert self.can_sample(batch_size)
-        idxes = sample_n_unique(lambda: random.randint(0, self.num_in_buffer - 2), batch_size)
+        idxes = list(range(batch_size))
         return self._encode_sample(idxes)
 
     def encode_recent_observation(self):
@@ -248,7 +247,11 @@ class ReplayBuffer(object):
         done: bool
             True if episode was finished after performing that action.
         """
-        self.action[idx] = action
+        self.action[idx] = np.zeros(self.action_dim)
+        self.action[idx][action] = 1
+        if np.sum(self.action[idx]) != 1:
+            print(self.action[idx])
+            exit()
         self.reward[idx] = reward
         self.done[idx]   = done
 

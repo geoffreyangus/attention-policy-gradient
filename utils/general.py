@@ -1,14 +1,19 @@
 import time
 import sys
+import math
+from collections import deque
+
 import logging
 import numpy as np
-from collections import deque
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
 CHEETAH_DIMS = 17
 CHEETAH_DIMS_MASKED = 8
+LANDER_DIMS = 8
+LANDER_DIMS_MASKED = 7
 
 def get_obs_dims(env_name, use_mask):
     if env_name == 'HalfCheetah-v1':
@@ -16,14 +21,19 @@ def get_obs_dims(env_name, use_mask):
             return CHEETAH_DIMS_MASKED
         else:
             return CHEETAH_DIMS
-    else:
-        raise ValueError
+    if env_name in {'LunarLander-v2', 'LunarLanderContinuous-v2'}:
+        if use_mask:
+            return LANDER_DIMS_MASKED
+        else:
+            return LANDER_DIMS
+    raise ValueError
 
 def mask_obs(env_name, obs):
     if env_name == 'HalfCheetah-v1':
         return obs[:8]
-    else:
-        raise ValueError
+    if env_name in {'LunarLander-v2', 'LunarLanderContinuous-v2'}:
+        return np.array([el for i, el in enumerate(obs) if i not in {2}])
+    raise ValueError
 
 
 def export_plot(ys, ylabel, title, filename):
@@ -174,3 +184,25 @@ class Progbar(object):
 
     def add(self, n, values=[]):
         self.update(self.seen_so_far+n, values)
+
+def get_timing_signal(length,
+                      min_timescale=1,
+                      max_timescale=1e4,
+                      num_timescales=16):
+  """Create Tensor of sinusoids of different frequencies.
+  Args:
+    length: Length of the Tensor to create, i.e. Number of steps.
+    min_timescale: a float
+    max_timescale: a float
+    num_timescales: an int
+  Returns:
+    Tensor of shape (length, 2*num_timescales)
+  """
+  positions = tf.to_float(tf.range(length))
+  log_timescale_increment = (
+      math.log(max_timescale / min_timescale) / (num_timescales - 1))
+  inv_timescales = min_timescale * tf.exp(
+      tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+  scaled_time = tf.expand_dims(positions, 1) * \
+      tf.expand_dims(inv_timescales, 0)
+  return tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)], axis=1)
